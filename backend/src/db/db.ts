@@ -1,4 +1,5 @@
 import mysql2 from 'mysql2/promise'
+import bcrypt from 'bcryptjs'
 import dotenv from 'dotenv'
 dotenv.config()
 
@@ -17,6 +18,7 @@ export const initDB = async () => {
       id INT AUTO_INCREMENT PRIMARY KEY,
       name VARCHAR(100) NOT NULL,
       email VARCHAR(100) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
       role ENUM('user', 'admin') DEFAULT 'user',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
@@ -50,7 +52,7 @@ export const initDB = async () => {
       user_id INT,
       title VARCHAR(255) NOT NULL,
       summary TEXT NOT NULL,
-      category ENUM('Admission', 'Fee Issue', 'Scholarship', 'Technical Support', 'Hostel', 'FYP') NOT NULL,
+      category ENUM('Appointment', 'Medical Concern', 'Billing', 'Complaint', 'General Inquiry', 'Technical Issue') NOT NULL,
       priority ENUM('Low', 'Medium', 'High', 'Critical') NOT NULL,
       status ENUM('Open', 'In Progress', 'Resolved', 'Escalated') DEFAULT 'Open',
       assigned_to VARCHAR(100),
@@ -60,6 +62,17 @@ export const initDB = async () => {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     )
   `)
+
+  // Seed admin account if not exists
+  const [rows]: any = await pool.execute('SELECT id FROM users WHERE email = ?', ['admin@admin.com'])
+  if (rows.length === 0) {
+    const hashed = await bcrypt.hash('admin', 10)
+    await pool.execute(
+      'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
+      ['Admin', 'admin@admin.com', hashed, 'admin']
+    )
+    console.log('✅ Admin account created (email: admin@admin.com, password: admin)')
+  }
 
   console.log('✅ Database tables ready')
 }

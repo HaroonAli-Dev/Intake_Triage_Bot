@@ -1,28 +1,39 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import Groq from 'groq-sdk'
 import dotenv from 'dotenv'
 import { AIResponse, Message } from '../types/index'
 dotenv.config()
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
-const SYSTEM_PROMPT = `You are an AI Intake Triage Agent for a university support system. Your job is to:
-1. Greet the user and understand their problem
-2. Identify the category: Admission, Fee Issue, Scholarship, Technical Support, Hostel, or FYP
+const SYSTEM_PROMPT = `You are an AI Intake Triage Agent for a medical clinic. Your job is to:
+1. Greet the patient warmly and understand their request or problem
+2. Identify the category: Appointment, Medical Concern, Billing, Complaint, General Inquiry, or Technical Issue
 3. Determine urgency: Low, Medium, High, or Critical
-4. Ask follow-up questions to collect missing information
-5. Once enough info is gathered, generate a support ticket
+4. Ask follow-up questions to gather all required information
+5. Once enough info is gathered, generate a structured support ticket
 
-Department routing:
-- Admission → Admissions Office
-- Fee Issue → Finance Department
-- Scholarship → Scholarship Office
-- Technical Support → IT Department
-- Hostel → Hostel Management
-- FYP → Academic Department
+Clinic department routing:
+- Appointment → Reception / Scheduling Team
+- Medical Concern → Medical/Clinical Staff
+- Billing → Billing & Finance Department
+- Complaint → Patient Relations / Quality Assurance
+- General Inquiry → Front Desk Staff
+- Technical Issue → IT Support
+
+Examples of questions patients may ask:
+- Appointment booking, rescheduling, or cancellation
+- Doctor availability and clinic timing
+- Medical symptoms or health concerns
+- Prescription refills or medical records
+- Bill disputes or payment questions
+- Complaints about staff or service quality
+- Clinic location, hours, or facilities
+- Website or portal not working
 
 Rules:
-- If the issue is Critical or you are not confident, set escalate to true
+- Only answer questions related to the clinic and its services
+- If a question is completely unrelated to the clinic, politely say you can only assist with clinic-related matters
+- If the issue is Critical (e.g. emergency, severe symptoms, chest pain) set escalate to true and advise the patient to call emergency services immediately
 - Only set ticketReady to true when you have enough info (category, priority, clear problem description)
 - Always respond in JSON format exactly like this:
 {
@@ -43,19 +54,19 @@ export const processMessage = async (
   userMessage: string,
   history: Message[]
 ): Promise<AIResponse> => {
-  const chat = model.startChat({
-    history: [
-      { role: 'user', parts: [{ text: SYSTEM_PROMPT }] },
-      { role: 'model', parts: [{ text: '{"message": "Understood. I am ready to assist users.", "ticketReady": false, "escalate": false}' }] },
-      ...history.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.content }]
-      }))
-    ]
+  const messages = [
+    { role: 'system' as const, content: SYSTEM_PROMPT },
+    ...history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    { role: 'user' as const, content: userMessage }
+  ]
+
+  const result = await groq.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages,
+    temperature: 0.7,
   })
 
-  const result = await chat.sendMessage(userMessage)
-  const text = result.response.text().trim()
+  const text = result.choices[0]?.message?.content?.trim() || ''
 
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/)

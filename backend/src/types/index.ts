@@ -20,7 +20,7 @@ export interface Ticket {
   user_id?: number
   title: string
   summary: string
-  category: 'Admission' | 'Fee Issue' | 'Scholarship' | 'Technical Support' | 'Hostel' | 'FYP'
+  category: 'Appointment' | 'Medical Concern' | 'Billing' | 'Complaint' | 'General Inquiry' | 'Technical Issue'
   priority: 'Low' | 'Medium' | 'High' | 'Critical'
   status: 'Open' | 'In Progress' | 'Resolved' | 'Escalated'
   assigned_to?: string
