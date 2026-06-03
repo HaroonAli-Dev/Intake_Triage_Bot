@@ -1,8 +1,9 @@
-import app, { dbInit } from './index'
+import app from './index'
+import { initDB } from './db/db'
 
 const PORT = Number(process.env.PORT) || 5000
 
-dbInit
+initDB()
   .then(() => {
     app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`))
   })

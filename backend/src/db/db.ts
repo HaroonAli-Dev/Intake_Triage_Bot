@@ -4,22 +4,42 @@ import dotenv from 'dotenv'
 
 dotenv.config()
 
-const pool = process.env.DATABASE_URL
-  ? new Pool({
+let pool: Pool | null = null
+
+function getPool(): Pool {
+  if (pool) return pool
+
+  if (process.env.DATABASE_URL) {
+    pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false },
+      max: 1,
     })
-  : new Pool({
+    return pool
+  }
+
+  if (process.env.DB_HOST) {
+    pool = new Pool({
       user: process.env.DB_USER,
       host: process.env.DB_HOST,
       database: process.env.DB_NAME,
       password: process.env.DB_PASSWORD,
       port: Number(process.env.DB_PORT) || 5432,
       ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+      max: 1,
     })
+    return pool
+  }
+
+  throw new Error(
+    'DATABASE_URL is not set. Add it in Vercel → backend project → Settings → Environment Variables.'
+  )
+}
 
 export const initDB = async () => {
-  await pool.query(`
+  const p = getPool()
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       name VARCHAR(100) NOT NULL,
@@ -30,7 +50,7 @@ export const initDB = async () => {
     )
   `)
 
-  await pool.query(`
+  await p.query(`
     CREATE TABLE IF NOT EXISTS conversations (
       id VARCHAR(36) PRIMARY KEY,
       user_id INTEGER,
@@ -40,7 +60,7 @@ export const initDB = async () => {
     )
   `)
 
-  await pool.query(`
+  await p.query(`
     CREATE TABLE IF NOT EXISTS messages (
       id SERIAL PRIMARY KEY,
       conversation_id VARCHAR(36) NOT NULL,
@@ -51,7 +71,7 @@ export const initDB = async () => {
     )
   `)
 
-  await pool.query(`
+  await p.query(`
     CREATE TABLE IF NOT EXISTS tickets (
       id VARCHAR(36) PRIMARY KEY,
       conversation_id VARCHAR(36),
@@ -69,10 +89,10 @@ export const initDB = async () => {
     )
   `)
 
-  const existing = await pool.query('SELECT id FROM users WHERE email = $1', ['admin@admin.com'])
+  const existing = await p.query('SELECT id FROM users WHERE email = $1', ['admin@admin.com'])
   if (existing.rows.length === 0) {
     const hashed = await bcrypt.hash('admin', 10)
-    await pool.query(
+    await p.query(
       'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)',
       ['Admin', 'admin@admin.com', hashed, 'admin']
     )
@@ -86,12 +106,12 @@ export async function query<T = Record<string, unknown>>(
   text: string,
   values?: unknown[]
 ): Promise<T[]> {
-  const res = await pool.query(text, values)
+  const res = await getPool().query(text, values)
   return res.rows as T[]
 }
 
 export async function transaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await pool.connect()
+  const client = await getPool().connect()
   try {
     await client.query('BEGIN')
     const res = await fn(client)
@@ -105,4 +125,8 @@ export async function transaction<T>(fn: (client: PoolClient) => Promise<T>): Pr
   }
 }
 
-export default pool
+export async function pingDb(): Promise<void> {
+  await getPool().query('SELECT 1')
+}
+
+export default getPool
