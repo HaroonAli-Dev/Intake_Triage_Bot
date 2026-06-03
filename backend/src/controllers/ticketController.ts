@@ -1,25 +1,35 @@
 import { Request, Response } from 'express'
-import pool from '../db/db'
+import { query } from '../db/db'
 
 export const getAllTickets = async (req: Request, res: Response) => {
   const { status, category, priority } = req.query
-  let query = `SELECT t.*, u.name as user_name, u.email as user_email 
-               FROM tickets t LEFT JOIN users u ON t.user_id = u.id WHERE 1=1`
-  const params: any[] = []
+  let sql = `SELECT t.*, u.name as user_name, u.email as user_email
+             FROM tickets t LEFT JOIN users u ON t.user_id = u.id WHERE 1=1`
+  const params: unknown[] = []
+  let n = 1
 
-  if (status) { query += ' AND t.status = ?'; params.push(status) }
-  if (category) { query += ' AND t.category = ?'; params.push(category) }
-  if (priority) { query += ' AND t.priority = ?'; params.push(priority) }
+  if (status) {
+    sql += ` AND t.status = $${n++}`
+    params.push(status)
+  }
+  if (category) {
+    sql += ` AND t.category = $${n++}`
+    params.push(category)
+  }
+  if (priority) {
+    sql += ` AND t.priority = $${n++}`
+    params.push(priority)
+  }
 
-  query += ' ORDER BY t.created_at DESC'
-  const [tickets]: any = await pool.execute(query, params)
+  sql += ' ORDER BY t.created_at DESC'
+  const tickets = await query(sql, params)
   res.json(tickets)
 }
 
 export const getTicketById = async (req: Request, res: Response) => {
-  const [tickets]: any = await pool.execute(
-    `SELECT t.*, u.name as user_name, u.email as user_email 
-     FROM tickets t LEFT JOIN users u ON t.user_id = u.id WHERE t.id = ?`,
+  const tickets = await query(
+    `SELECT t.*, u.name as user_name, u.email as user_email
+     FROM tickets t LEFT JOIN users u ON t.user_id = u.id WHERE t.id = $1`,
     [req.params.id]
   )
   if (tickets.length === 0) return res.status(404).json({ error: 'Ticket not found' })
@@ -28,23 +38,23 @@ export const getTicketById = async (req: Request, res: Response) => {
 
 export const updateTicket = async (req: Request, res: Response) => {
   const { status, assigned_to } = req.body
-  await pool.execute(
-    'UPDATE tickets SET status = ?, assigned_to = ? WHERE id = ?',
+  await query(
+    'UPDATE tickets SET status = $1, assigned_to = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
     [status, assigned_to, req.params.id]
   )
   res.json({ success: true })
 }
 
-export const getStats = async (req: Request, res: Response) => {
-  const [total]: any = await pool.execute('SELECT COUNT(*) as count FROM tickets')
-  const [byStatus]: any = await pool.execute('SELECT status, COUNT(*) as count FROM tickets GROUP BY status')
-  const [byCategory]: any = await pool.execute('SELECT category, COUNT(*) as count FROM tickets GROUP BY category')
-  const [byPriority]: any = await pool.execute('SELECT priority, COUNT(*) as count FROM tickets GROUP BY priority')
+export const getStats = async (_req: Request, res: Response) => {
+  const [total] = await query<{ count: string }>('SELECT COUNT(*)::int as count FROM tickets')
+  const byStatus = await query('SELECT status, COUNT(*)::int as count FROM tickets GROUP BY status')
+  const byCategory = await query('SELECT category, COUNT(*)::int as count FROM tickets GROUP BY category')
+  const byPriority = await query('SELECT priority, COUNT(*)::int as count FROM tickets GROUP BY priority')
 
   res.json({
-    total: total[0].count,
+    total: total.count,
     byStatus,
     byCategory,
-    byPriority
+    byPriority,
   })
 }

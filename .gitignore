@@ -20,6 +20,9 @@ dist-ssr
 # PDF files
 *.pdf
 
+# Docs files
+*.docx
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
