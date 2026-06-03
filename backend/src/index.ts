@@ -54,4 +54,13 @@ app.use('/api/auth', authRoutes)
 app.use('/api/chat', chatRoutes)
 app.use('/api/tickets', ticketRoutes)
 
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Not found' })
+})
+
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Unhandled error:', err)
+  res.status(500).json({ error: 'Internal server error' })
+})
+
 export default app

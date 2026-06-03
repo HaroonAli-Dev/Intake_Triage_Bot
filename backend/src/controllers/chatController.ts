@@ -1,7 +1,6 @@
 import { Request, Response } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { query, transaction } from '../db/db'
-import { processMessage } from '../services/aiAgent'
 import type { Message } from '../types/index'
 import type { AuthRequest } from '../middleware/auth'
 
@@ -28,6 +27,7 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
       [conversationId]
     )
 
+    const { processMessage } = await import('../services/aiAgent')
     const aiResponse = await processMessage(message, history.rows as Message[])
 
     await client.query(
