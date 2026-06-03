@@ -10,8 +10,23 @@ dotenv.config()
 
 const app = express()
 
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173' }))
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:5173')
+  .split(',')
+  .map(o => o.trim().replace(/\/+$/, ''))
+
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) cb(null, true)
+    else cb(new Error('CORS not allowed'))
+  },
+  credentials: true,
+}))
 app.use(express.json())
+
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`)
+  next()
+})
 
 let dbReady: Promise<void> | null = null
 
